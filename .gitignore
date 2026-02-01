@@ -1,0 +1,44 @@
+# Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Python scripts (Block all by default)
+*.py
+# Whitelist specific files
+!parser.py
+!main.py
+!cli.py
+
+# OS-specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment and Secrets
+.env
+.env.*
+venv/
+.venv/
+ENV/
+env/
+*.pem
+config.json
+config.tr.json
+
+# IDE and Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+.project
+.pydevproject
+
+# Data content
+*.pdf
+
