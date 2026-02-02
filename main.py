@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional, Any
-from parser import PDFParser, PDFParserError
+from pdf_parser import PDFParser, PDFParserError
 
 app = FastAPI(title="PDF Analysis API")
 
@@ -20,9 +20,15 @@ app.add_middleware(
 )
 
 @app.post("/analyze-pdf")
-async def analyze_pdf(file: UploadFile = File(...)):
+async def analyze_pdf(
+    file: UploadFile = File(...),
+    lang: str = "en"  # Default to English, supports "tr"
+):
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="File must be a PDF")
+
+    # Select config based on language
+    config_file = "config.tr.json" if lang.lower() == "tr" else "config.json"
 
     # Create a temporary file to save the upload
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -33,8 +39,8 @@ async def analyze_pdf(file: UploadFile = File(...)):
             raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
     try:
-        # Initialize parser
-        parser = PDFParser(tmp_path, config_path="config.json")
+        # Initialize parser with selected config
+        parser = PDFParser(tmp_path, config_path=config_file)
         
         # Analyze
         metadata = parser.get_metadata()

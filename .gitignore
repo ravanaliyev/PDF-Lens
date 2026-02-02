@@ -6,7 +6,7 @@ __pycache__/
 # Python scripts (Block all by default)
 *.py
 # Whitelist specific files
-!parser.py
+!pdf_parser.py
 !main.py
 !cli.py
 

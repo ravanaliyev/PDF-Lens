@@ -10,7 +10,7 @@ import os
 # Ensure we can import from the current directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from parser import PDFParser, PDFParserError
+from pdf_parser import PDFParser, PDFParserError
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze a PDF file to extract structure, TOC, and content.")

@@ -1105,24 +1105,7 @@ class PDFParser:
         def is_copyright_topic(title: str, page_num: int) -> bool:
             return page_num in copyright_page_numbers
 
-        # 1. Font-based
-        headings = self.get_headings_by_font()
-        if headings:
-            headings_sorted = sorted(headings, key=lambda h: (h["page_number"], h["bbox"][1] if h["bbox"] else 0))
-            h_lines = []
-            for h in headings_sorted:
-                found_line = find_heading_line(h["text"], h["page_number"])
-                if found_line is not None:
-                    h_lines.append((found_line, h["text"], None, h["page_number"]))
-            if h_lines:
-                h_lines.sort(key=lambda x: x[0])
-                topics = self._topics_from_heading_lines(
-                    full_text_by_lines, h_lines, content_starts_after_heading=False, is_copyright_topic=is_copyright_topic
-                )
-                if topics:
-                    return topics
-
-        # 2. TOC
+        # 1. TOC (Metadata & Visual) - Prioritize explicit structure
         toc = self.get_toc()
         if toc:
             h_lines = []
@@ -1140,6 +1123,23 @@ class PDFParser:
                         seen.add(t[0])
                 topics = self._topics_from_heading_lines(
                     full_text_by_lines, unique, content_starts_after_heading=True, is_copyright_topic=is_copyright_topic
+                )
+                if topics:
+                    return topics
+
+        # 2. Font-based detection
+        headings = self.get_headings_by_font()
+        if headings:
+            headings_sorted = sorted(headings, key=lambda h: (h["page_number"], h["bbox"][1] if h["bbox"] else 0))
+            h_lines = []
+            for h in headings_sorted:
+                found_line = find_heading_line(h["text"], h["page_number"])
+                if found_line is not None:
+                    h_lines.append((found_line, h["text"], None, h["page_number"]))
+            if h_lines:
+                h_lines.sort(key=lambda x: x[0])
+                topics = self._topics_from_heading_lines(
+                    full_text_by_lines, h_lines, content_starts_after_heading=False, is_copyright_topic=is_copyright_topic
                 )
                 if topics:
                     return topics
