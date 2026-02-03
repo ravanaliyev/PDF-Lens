@@ -117,8 +117,9 @@ def main():
             start = t.get('start_line')
             end = t.get('end_line')
             content = t.get('content','')
+            page = t.get('page_number', 'N/A')
             print('\n' + '='*100)
-            print(f"Topic {i}: {title} (Level {level}) Lines: {start}-{end} Length: {len(content)} chars")
+            print(f"Topic {i}: {title} (Level {level}) Page: {page} Lines: {start}-{end} Length: {len(content)} chars")
             print('-'*100)
             print(content)
 

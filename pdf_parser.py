@@ -1022,6 +1022,7 @@ class PDFParser:
                 "start_line": start_line,
                 "end_line": end_line,
                 "content": content,
+                "page_number": page_num,
             }
             if level is not None:
                 topic_dict["level"] = level
