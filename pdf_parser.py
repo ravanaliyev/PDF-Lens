@@ -4,6 +4,7 @@ import re
 import json
 import unicodedata
 from datetime import datetime
+import difflib
 from typing import List, Dict, Optional, Any, Set
 
 
@@ -30,6 +31,7 @@ class PDFParser:
         self.doc: Optional[fitz.Document] = None
         self.config: Dict[str, Any] = {}
         self.blacklist: Set[str] = set()
+        self._noise_cache: Optional[Set[str]] = None
         
         # Load config file
         self._load_config(config_path)
@@ -194,6 +196,9 @@ class PDFParser:
         if not self.doc:
             raise PDFParserError("PDF file is not open.")
 
+        if self._noise_cache is not None and min_pages is None and top_n is None and bottom_n is None:
+            return self._noise_cache
+
         nf = self.config.get("noise_filter", {})
         min_pages = min_pages if min_pages is not None else nf.get("min_pages", 3)
         top_n = top_n if top_n is not None else nf.get("top_n", 3)
@@ -207,34 +212,98 @@ class PDFParser:
         for i in range(self.doc.page_count):
             try:
                 page = self.doc.load_page(i)
-                raw = page.get_text("text") or ""
+                height = page.rect.height
+                # "blocks" is much faster than "dict"
+                blocks = page.get_text("blocks") or []
             except Exception:
                 continue
 
-            lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
-            if not lines:
-                continue
+            for b in blocks:
+                if b[6] != 0:  # block_type 0 is text
+                    continue
+                
+                y0, y1 = b[1], b[3]
+                txt = b[4].strip()
+                if not txt:
+                    continue
+                
+                # Split blocks into lines for granular header matching
+                for line_text in txt.splitlines():
+                    ln = line_text.strip()
+                    if not ln: continue
+                    
+                    norm = self._normalize_line(ln)
+                    if not norm:
+                        continue
 
-            tops = lines[:top_n]
-            bots = lines[-bottom_n:]
+                    # Top zone: first 10% (approximate block bbox for lines inside)
+                    if y1 < height * 0.10:
+                        top_counts[norm] += 1
+                    # Bottom zone: last 10%
+                    elif y0 > height * 0.90:
+                        bottom_counts[norm] += 1
 
-            for l in tops:
-                n = self._normalize_line(l)
-                if n:
-                    top_counts[n] += 1
-
-            for l in bots:
-                n = self._normalize_line(l)
-                if n:
-                    bottom_counts[n] += 1
+        # Collect all candidates with their counts
+        top_candidates = list(top_counts.items())
+        bottom_candidates = list(bottom_counts.items())
 
         repeated = set()
-        for line, cnt in top_counts.items():
-            if cnt >= min_pages:
-                repeated.add(line)
-        for line, cnt in bottom_counts.items():
-            if cnt >= min_pages:
-                repeated.add(line)
+
+        def gather_fuzzy_matches(candidates, threshold=0.9):
+            # candidates: list of (line, count)
+            # We want to group similarities.
+            # Simple approach: A greedy clustering.
+            # Sort by frequency (descending) to pick most common forms as cluster centers.
+            sorted_c = sorted(candidates, key=lambda x: x[1], reverse=True)
+            
+            processed = set()
+            
+            for i, (line1, count1) in enumerate(sorted_c):
+                if line1 in processed:
+                    continue
+                
+                # Start a cluster
+                cluster = {line1}
+                total_count = count1
+                processed.add(line1)
+                
+                len1 = len(line1)
+                # Optimization: create Matcher once for line1
+                sm = difflib.SequenceMatcher(None, line1, "")
+                
+                for j in range(i + 1, len(sorted_c)):
+                    line2, count2 = sorted_c[j]
+                    if line2 in processed:
+                        continue
+                    
+                    # Pre-filter: length must be similar
+                    len2 = len(line2)
+                    if abs(len1 - len2) > max(len1, len2) * 0.2:
+                        continue
+                        
+                    # Fast similarity check
+                    sm.set_seq2(line2)
+                    if sm.real_quick_ratio() < threshold:
+                        continue
+                    if sm.quick_ratio() < threshold:
+                        continue
+                        
+                    # Expensive exact check
+                    if sm.ratio() >= threshold:
+                        cluster.add(line2)
+                        total_count += count2
+                        processed.add(line2)
+                
+                # If total count of cluster >= min_pages, mark ALL variations as noise
+                if total_count >= min_pages:
+                    repeated.update(cluster)
+
+        gather_fuzzy_matches(top_candidates)
+        gather_fuzzy_matches(bottom_candidates)
+        
+        # Cache the result if using defaults
+        if min_pages is None and top_n is None and bottom_n is None:
+            self._noise_cache = repeated
 
         return repeated
 
@@ -291,8 +360,9 @@ class PDFParser:
         except Exception:
             noise_set = set()
         nf = self.config.get("noise_filter", {})
-        top_n = nf.get("top_n", 3)
-        bottom_n = nf.get("bottom_n", 3)
+        # Increase window to be sure we catch everything in the 10% zone
+        top_n = max(nf.get("top_n", 3), 10)
+        bottom_n = max(nf.get("bottom_n", 3), 10)
 
         for i in range(self.doc.page_count):
             try:
@@ -788,7 +858,8 @@ class PDFParser:
         self, 
         debug: bool = False, 
         force_content: bool = False,
-        keywords: Optional[List[str]] = None
+        keywords: Optional[List[str]] = None,
+        max_pages: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """Detects headings from page content (if TOC missing or `force_content=True`).
 
@@ -866,6 +937,9 @@ class PDFParser:
                 pass
 
         pages = self.get_pages()
+        if max_pages:
+            pages = pages[:max_pages]
+
         # Compute noise set
         try:
             noise_set = self.detect_repeating_headers_footers()
@@ -1181,7 +1255,7 @@ class PDFParser:
                 parts.append(p["clean_text"])
         return "\n\n".join(parts)
 
-    def analyze_page_structure(self) -> List[Dict[str, Any]]:
+    def analyze_page_structure(self, max_pages: Optional[int] = None) -> List[Dict[str, Any]]:
         """Analyzes structure of each page: image/table count, OCR need.
 
         Heuristics:
@@ -1199,7 +1273,11 @@ class PDFParser:
 
         # --- Collect all image blocks across pages ---
         all_images: List[Dict[str, Any]] = []
-        for page_idx in range(self.doc.page_count):
+        limit = self.doc.page_count
+        if max_pages:
+            limit = min(limit, max_pages)
+            
+        for page_idx in range(limit):
             try:
                 page = self.doc.load_page(page_idx)
                 d = page.get_text("dict") or {}
@@ -1275,7 +1353,7 @@ class PDFParser:
                 decorative_keys.add(key)
 
         # --- Produce per-page results excluding decorative images ---
-        for page_idx in range(self.doc.page_count):
+        for page_idx in range(limit):
             page = self.doc.load_page(page_idx)
             raw = page.get_text("text") or ""
             clean = self.clean_text(raw)

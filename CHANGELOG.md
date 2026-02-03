@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-04
+
+### Added
+- **Visual Zone Noise Detection**: Replaced fixed-line noise detection with coordinate-based targeting (top/bottom 10% of page height).
+- **Fuzzy Noise Matching**: implemented robust header/footer deduplication using optimized fuzzy matching logic (tiered `difflib` similarity checks).
+- **Caching Mechanism**: Added internal caching for the expensive noise discovery process within `PDFParser`, significantly improving performance for subsequent operations like segmentation.
+- **Partial Processing**: Added `max_pages` support to `analyze_page_structure` and `detect_headings_from_content` for faster previews on large documents.
+
+### Optimized
+- **Extraction Speed**: Migrated noise candidate extraction to `get_text("blocks")`, reducing overhead on large PDFs compared to full dictionary extraction.
+
 ## [1.1.0] - 2026-02-02
 
 ### Changed

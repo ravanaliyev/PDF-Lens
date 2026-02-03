@@ -22,7 +22,7 @@ The project is architected into three primary layers:
 
 | Component | Type | Responsibility |
 |-----------|------|----------------|
-| **`parser.py`** | **Engine** | The core logic handler built on `PyMuPDF` (`fitz`). It performs low-level data extraction and heuristic analysis. |
+| **`pdf_parser.py`** | **Engine** | The core logic handler built on `PyMuPDF` (`fitz`). It performs low-level data extraction and heuristic analysis. |
 | **`main.py`** | **API** | A `FastAPI` powered server layer that acts as the bridge between the Python engine and external clients (like Flutter). |
 | **`cli.py`** | **Dev Tools** | A command-line interface for rapid testing and detailed analysis reporting in the terminal. |
 
@@ -58,7 +58,7 @@ python cli.py [optional_path_to_pdf]
 
 | File | Description |
 |------|-------------|
-| `parser.py` | Core PDF processing and heuristic logic. |
+| `pdf_parser.py` | Core PDF processing and heuristic logic. |
 | `main.py` | REST API (`FastAPI`) implementation and entry point. |
 | `cli.py` | Command-line interface for debugging and local reports. |
 | `config.json` | Centralized configuration for heading detection and blacklists. |
